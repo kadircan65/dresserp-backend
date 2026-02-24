@@ -1,59 +1,118 @@
-require("dotenv").config();
+// index.js (Railway + Postgres + Express) - CLEAN VERSION
+
+// dotenv sadece local için; Railway'de gerek yok ama sorun da çıkarmaz
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
 
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL
-    ? { rejectUnauthorized: false }
-    : false,
-});
-pool.connect()
-  .then(() => console.log("Database connected"))
-  .catch(err => console.error("Database connection error:", err));
 const app = express();
-app.use(express.json());
-app.use(cors({
+
+/**
+ * CORS
+ * - Local dev: http://localhost:5173
+ * - Railway frontend: https://dresserp-frontend-production.up.railway.app
+ * Gerekirse frontend domainini değiştir.
+ */
+const corsOptions = {
   origin: [
     "http://localhost:5173",
-    "https://dresserp-frontend-production.up.railway.app"
+    "https://dresserp-frontend-production.up.railway.app",
   ],
-  methods: ["GET","POST","DELETE","PUT","PATCH","OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
+  credentials: true,
+};
 
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+app.use(express.json());
 
-// Sağlık kontrolü
-app.get("/", (req, res) => {
-  res.send("Backend çalışıyor ✅");
+/**
+ * PostgreSQL Pool
+ * - Railway Postgres için SSL genelde gerekir.
+ */
+const DATABASE_URL =
+  process.env.DATABASE_URL || process.env["Postgres.DATABASE_URL"];
+
+if (!DATABASE_URL) {
+  console.error("❌ DATABASE_URL missing. Railway Variables -> DATABASE_URL ekle.");
+}
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
-// Ürünleri listele
+// Başlangıçta DB bağlantısını dene (crash etmesin, sadece log yazsın)
+pool
+  .connect()
+  .then((client) => {
+    client.release();
+    console.log("✅ Database connected");
+  })
+  .catch((err) => {
+    console.error("❌ Database connect error:", err.message);
+  });
+
+/**
+ * Health / Root
+ */
+app.get("/", (req, res) => res.status(200).send("OK"));
+app.get("/health", (req, res) => res.status(200).send("ok"));
+
+/**
+ * (Opsiyonel) tablo yoksa otomatik oluştur
+ * products: id SERIAL, name TEXT, price INTEGER
+ */
+async function ensureTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        price INTEGER NOT NULL
+      );
+    `);
+    console.log("✅ products table ready");
+  } catch (err) {
+    console.error("❌ ensureTable error:", err.message);
+  }
+}
+ensureTable();
+
+/**
+ * CRUD: /products
+ */
+
+// Listele
 app.get("/products", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM products ORDER BY id DESC;");
     res.json(result.rows);
   } catch (err) {
-    console.error("GET /products hata:", err);
+    console.error("GET /products error:", err);
     res.status(500).json({ error: "Ürünler alınamadı" });
   }
 });
 
-// Ürün ekle
+// Ekle
 app.post("/products", async (req, res) => {
   try {
     const { name, price } = req.body;
 
-    if (!name || String(name).trim() === "" || price === undefined || price === null) {
-      return res.status(400).json({ error: "name ve price zorunlu" });
+    if (!name || String(name).trim() === "") {
+      return res.status(400).json({ error: "name zorunlu" });
+    }
+    if (price === undefined || price === null || String(price).trim() === "") {
+      return res.status(400).json({ error: "price zorunlu" });
     }
 
-    const priceNum = Number(String(price).replace(",", "."));
-    if (!Number.isFinite(priceNum)) {
+    const priceNum = Number(price);
+    if (Number.isNaN(priceNum)) {
       return res.status(400).json({ error: "price sayı olmalı" });
     }
 
@@ -64,64 +123,61 @@ app.post("/products", async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("POST /products hata:", err);
+    console.error("POST /products error:", err);
     res.status(500).json({ error: "Ürün eklenemedi" });
   }
 });
 
-// Ürün güncelle
+// Güncelle
 app.put("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, price } = req.body;
 
-    if (!name || price === undefined) {
-      return res.status(400).json({ error: "name ve price zorunlu" });
+    if (!name || String(name).trim() === "") {
+      return res.status(400).json({ error: "name zorunlu" });
+    }
+    if (price === undefined || price === null || String(price).trim() === "") {
+      return res.status(400).json({ error: "price zorunlu" });
+    }
+
+    const priceNum = Number(price);
+    if (Number.isNaN(priceNum)) {
+      return res.status(400).json({ error: "price sayı olmalı" });
     }
 
     const result = await pool.query(
       "UPDATE products SET name=$1, price=$2 WHERE id=$3 RETURNING *;",
-      [name, price, id]
+      [String(name).trim(), priceNum, Number(id)]
     );
 
-    const updated = result.rows[0];
+    if (!result.rows[0]) return res.status(404).json({ error: "Bulunamadı" });
 
-    if (!updated) {
-      return res.status(404).json({ error: "Ürün bulunamadı" });
-    }
-
-    res.json(updated);
-
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("PUT hata:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("PUT /products/:id error:", err);
+    res.status(500).json({ error: "Ürün güncellenemedi" });
   }
 });
 
-// Ürün sil
+// Sil
 app.delete("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      "DELETE FROM products WHERE id = $1 RETURNING id;",
-      [id]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Ürün bulunamadı" });
-    }
-
-    res.json({ message: "Ürün silindi", id: result.rows[0].id });
+    await pool.query("DELETE FROM products WHERE id=$1;", [Number(id)]);
+    res.json({ message: "Ürün silindi" });
   } catch (err) {
-    console.error("DELETE /products/:id hata:", err);
+    console.error("DELETE /products/:id error:", err);
     res.status(500).json({ error: "Ürün silinemedi" });
   }
 });
 
-// Port
-const PORT = process.env.PORT || 3000;
+/**
+ * Railway PORT
+ */
+const PORT = Number(process.env.PORT) || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port " + PORT);
+  console.log("✅ Server listening on port", PORT);
 });
