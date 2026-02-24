@@ -1,16 +1,18 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
 const app = express();
-
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://dresserp-frontend-production.up.railway.app"
-  ]
-}));
-
+app.use(express.json());
 app.use(cors({
   origin: [
     "http://localhost:5173",
