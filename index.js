@@ -35,17 +35,35 @@ app.use(express.json());
  * PostgreSQL Pool
  * - Railway Postgres için SSL genelde gerekir.
  */
+// --- SAFE DATABASE SETUP (crash etmez) ---
 const DATABASE_URL =
-  process.env.DATABASE_URL || process.env["Postgres.DATABASE_URL"];
+  process.env.DATABASE_URL ||
+  process.env["Postgres.DATABASE_URL"] ||
+  process.env.DATABASE_PUBLIC_URL ||
+  process.env["Postgres.DATABASE_PUBLIC_URL"];
+
+let pool = null;
 
 if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL missing. Railway Variables -> DATABASE_URL ekle.");
-}
+  console.error("❌ DATABASE_URL yok. Railway -> dresserp-backend -> Variables içine DATABASE_URL ekle.");
+} else {
+  try {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
 
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+    // DB denemesi: hata olsa bile server'ı düşürmez
+    pool
+      .query("SELECT 1;")
+      .then(() => console.log("✅ Database reachable"))
+      .catch((err) => console.error("❌ DB reachable değil:", err.message));
+  } catch (err) {
+    console.error("❌ Pool oluşturulamadı:", err.message);
+    pool = null;
+  }
+}
+// --- /SAFE DATABASE SETUP ---
 
 // Başlangıçta DB bağlantısını dene (crash etmesin, sadece log yazsın)
 pool
