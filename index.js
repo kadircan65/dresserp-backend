@@ -1,26 +1,26 @@
-require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
-const { Pool } = require("pg");
 
 const app = express();
-app.use(express.json());
 
-// ✅ CORS: React dev server genelde 5173 veya 5174
 app.use(cors({
-  origin: ["http://localhost:5173"],
+  origin: [
+    "http://localhost:5173",
+    "https://dresserp-frontend-production.up.railway.app"
+  ]
+}));
+
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://dresserp-frontend-production.up.railway.app"
+  ],
+  methods: ["GET","POST","DELETE","PUT","PATCH","OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
 
-// ✅ PostgreSQL bağlantısı (Supabase için SSL genelde gerekir)
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === "false"
-      ? false
-      : { rejectUnauthorized: false },
-});
+app.options("*", cors());
 
 // Sağlık kontrolü
 app.get("/", (req, res) => {
