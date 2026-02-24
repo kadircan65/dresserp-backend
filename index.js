@@ -12,24 +12,9 @@ const { Pool } = require("pg");
 const app = express();
 
 /**
- * CORS
- * - Local dev: http://localhost:5173
- * - Railway frontend: https://dresserp-frontend-production.up.railway.app
- * Gerekirse frontend domainini değiştir.
- */
-const corsOptions = {
-  origin: [
-    "http://localhost:5173",
-    "https://dresserp-frontend-production.up.railway.app",
-  ],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-app.use(express.json());
+// CORS - temiz ve sorunsuz
+app.use(cors());
+app.options("*", cors());
 
 /**
  * PostgreSQL Pool
