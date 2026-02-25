@@ -1,33 +1,65 @@
+import express from "express";
 import cors from "cors";
 
-// TÜM VERCEL DOMAINLERİNİ ve localhost'u izin ver
-const corsOptions = {
-  origin: function (origin, callback) {
+const app = express();
 
-    // origin yoksa izin ver (Postman vs)
+app.use(express.json());
+
+/*
+====================================
+CORS FINAL CONFIG (VERCEL + LOCAL)
+====================================
+*/
+const allowedOrigins = [
+  "https://dresserp-frontend.vercel.app",
+  "http://localhost:5173"
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+
+    // Postman, server-to-server, curl vs için izin
     if (!origin) return callback(null, true);
 
-    // localhost izinli
-    if (origin.includes("localhost")) {
+    // allowedOrigins listesinde varsa izin ver
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    // tüm vercel.app domainlerini izinli yap
+    // Vercel preview deployları için izin
     if (origin.endsWith(".vercel.app")) {
       return callback(null, true);
     }
 
-    // railway frontend varsa
-    if (origin.endsWith(".railway.app")) {
-      return callback(null, true);
-    }
-
-    // diğerlerini reddet
+    // diğer her şeyi blokla
     return callback(new Error("CORS blocked: " + origin));
+
   },
-
   credentials: true
-};
+}));
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// preflight için gerekli
+app.options("*", cors());
+
+/*
+====================================
+ROUTES BURADAN SONRA GELİR
+====================================
+*/
+
+// örnek health endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+/*
+====================================
+SERVER START
+====================================
+*/
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
