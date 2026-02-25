@@ -39,7 +39,19 @@ app.get("/health", (req, res) => {
     timestamp: new Date(),
   });
 });
+async function ensureAndMigrateTable() {
+  try {
+    // 1) base table (yoksa oluştur)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        price NUMERIC NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
+    
 // ================================
 // Database connection
 // ================================
@@ -77,7 +89,52 @@ app.get("/products", async (req, res) => {
     const result = await pool.query(
       "SELECT * FROM products ORDER BY id DESC"
     );
+// ================================
+// DATABASE SETUP + MIGRATION
+// ================================
 
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_DATABASE_URL;
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
+
+async function ensureAndMigrateTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        price NUMERIC NOT NULL,
+        size TEXT,
+        color TEXT,
+        category TEXT,
+        stock INT DEFAULT 1,
+        deposit NUMERIC DEFAULT 0,
+        image_url TEXT,
+        is_rented BOOLEAN DEFAULT FALSE,
+        rented_to TEXT,
+        rented_phone TEXT,
+        rent_start DATE,
+        rent_end DATE,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("✅ products table ready");
+  } catch (err) {
+    console.error("❌ table error:", err.message);
+  }
+}
+
+ensureAndMigrateTable();
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -133,6 +190,6 @@ app.delete("/products/:id", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server started on port", PORT);
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
