@@ -1,8 +1,8 @@
 const express = require("express");
-
 const cors = require("cors");
 const { Pool } = require("pg");
-const cors = require("cors");
+
+const app = express(); // ⬅️ BU EN ÜSTTE OLACAK
 
 const corsOptions = {
   origin: [
@@ -15,9 +15,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-const app = express();
-
-app.use(cors());
 app.use(express.json());
 
 /*
