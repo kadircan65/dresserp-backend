@@ -8,7 +8,6 @@ if (process.env.NODE_ENV !== "production") {
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
-const API = import.meta.env.VITE_API_URL;
 const app = express();
 
 /**
