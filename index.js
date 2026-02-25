@@ -1,8 +1,6 @@
-// ================================
-// Railway + Express + Postgres
-// CLEAN STABLE VERSION
-// ================================
+// index.js (Railway + Postgres + Express) - STABLE
 
+// dotenv sadece local için (Railway'de env zaten var)
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
 }
@@ -13,49 +11,26 @@ const { Pool } = require("pg");
 
 const app = express();
 
-// ================================
-// Middleware
-// ================================
-
+// ---------- middleware ----------
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: "*",
-  })
-);
+// CORS: kendi domainlerini burada tut
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "https://dresserp-frontend-production.up.railway.app",
+  ],
+  credentials: true,
+};
 
-// ================================
-// Health check
-// ================================
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
-app.get("/", (req, res) => {
-  res.send("Backend running");
-});
+// ---------- health ----------
+app.get("/", (req, res) => res.status(200).send("OK"));
+app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    timestamp: new Date(),
-  });
-});
-async function ensureAndMigrateTable() {
-  try {
-    // 1) base table (yoksa oluştur)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        price NUMERIC NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    
-// ================================
-// Database connection
-// ================================
-
+// ---------- DB pool ----------
 const DATABASE_URL =
   process.env.DATABASE_URL ||
   process.env.Postgres_DATABASE_URL ||
@@ -67,129 +42,127 @@ let pool = null;
 if (DATABASE_URL) {
   pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    // Railway Postgres çoğu zaman ssl ister
+    ssl: { rejectUnauthorized: false },
   });
 
-  console.log("Database connected");
+  pool.on("error", (err) => {
+    console.error("Unexpected PG pool error:", err);
+  });
 } else {
-  console.log("WARNING: DATABASE_URL not found");
+  console.warn("⚠️ DATABASE_URL not set. DB routes will return safe errors.");
 }
 
-// ================================
-// Products routes
-// ================================
+// ---------- debug db ----------
+app.get("/debug/db", async (req, res) => {
+  try {
+    if (!pool) return res.status(500).json({ ok: false, error: "DB not configured" });
+    const r = await pool.query("SELECT 1 AS ok");
+    return res.json({ ok: true, result: r.rows[0] });
+  } catch (err) {
+    console.error("GET /debug/db error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
-// GET products
+// ---------- ensure table ----------
+async function ensureTable() {
+  if (!pool) return;
+
+  // tablo yoksa oluştur (crash etmeden)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      price NUMERIC DEFAULT 0,
+      size TEXT,
+      color TEXT,
+      category TEXT,
+      stock INTEGER DEFAULT 0,
+      deposit NUMERIC DEFAULT 0,
+      image_url TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+}
+
+// ---------- products ----------
 app.get("/products", async (req, res) => {
   try {
     if (!pool) return res.json([]);
-
-    const result = await pool.query(
-      "SELECT * FROM products ORDER BY id DESC"
-    );
-// ================================
-// DATABASE SETUP + MIGRATION
-// ================================
-
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  process.env.POSTGRES_URL ||
-  process.env.POSTGRES_DATABASE_URL;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
-
-async function ensureAndMigrateTable() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        price NUMERIC NOT NULL,
-        size TEXT,
-        color TEXT,
-        category TEXT,
-        stock INT DEFAULT 1,
-        deposit NUMERIC DEFAULT 0,
-        image_url TEXT,
-        is_rented BOOLEAN DEFAULT FALSE,
-        rented_to TEXT,
-        rented_phone TEXT,
-        rent_start DATE,
-        rent_end DATE,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    console.log("✅ products table ready");
-  } catch (err) {
-    console.error("❌ table error:", err.message);
-  }
-}
-
-ensureAndMigrateTable();
+    const result = await pool.query(`SELECT * FROM products ORDER BY id DESC`);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Database error" });
+    console.error("GET /products error:", err);
+    res.json([]);
   }
 });
 
-// POST product
 app.post("/products", async (req, res) => {
   try {
-    if (!pool)
-      return res.status(500).json({ error: "Database not ready" });
+    if (!pool) return res.status(500).json({ error: "DB not configured" });
 
-    const { name, price } = req.body;
+    const {
+      name,
+      price = 0,
+      size = null,
+      color = null,
+      category = null,
+      stock = 0,
+      deposit = 0,
+      image_url = null,
+      notes = null,
+    } = req.body || {};
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: "name is required" });
+    }
 
     const result = await pool.query(
-      "INSERT INTO products (name, price) VALUES ($1,$2) RETURNING *",
-      [name, price]
+      `INSERT INTO products
+      (name, price, size, color, category, stock, deposit, image_url, notes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *`,
+      [String(name).trim(), Number(price), size, color, category, Number(stock), Number(deposit), image_url, notes]
     );
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Insert failed" });
+    console.error("POST /products error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
-// DELETE product
+
 app.delete("/products/:id", async (req, res) => {
   try {
+    if (!pool) return res.status(500).json({ error: "DB not configured" });
+
     const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ error: "invalid id" });
-    }
+    if (!id) return res.status(400).json({ error: "invalid id" });
 
-    const result = await pool.query(
-      "DELETE FROM products WHERE id=$1 RETURNING id",
-      [id]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "not found" });
-    }
-
-    res.json({ message: "deleted", id });
+    await pool.query("DELETE FROM products WHERE id = $1", [id]);
+    res.json({ ok: true });
   } catch (err) {
-    console.error("DELETE /products/:id error:", err.message);
-    res.status(500).json({ error: "delete failed" });
+    console.error("DELETE /products/:id error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
-// ================================
-// Start server (Railway compatible)
-// ================================
 
-const PORT = process.env.PORT || 3000;
+// ---------- boot ----------
+const PORT = Number(process.env.PORT) || 3000;
 
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
+(async () => {
+  try {
+    await ensureTable();
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("✅ Server listening on port", PORT);
+      console.log("✅ NODE_ENV:", process.env.NODE_ENV);
+      console.log("✅ DB configured:", !!DATABASE_URL);
+    });
+  } catch (err) {
+    console.error("❌ Boot error:", err);
+    // Railway crash log'a düşsün diye:
+    process.exit(1);
+  }
+})();
