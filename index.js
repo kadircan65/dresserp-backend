@@ -21,7 +21,9 @@ app.use(cors({
   credentials: true
 }));
 app.options("*", cors());
-app.get("/", (req, res) => res.status(200).send("OK"));
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", version: "v2-debug" });
+});
 app.get("/health", (req, res) => res.status(200).send("ok"));
 /**
  * PostgreSQL Pool
