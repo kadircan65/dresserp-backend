@@ -38,14 +38,18 @@ const DATABASE_URL =
 
 let pool = null;
 
-if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL yok. Railway -> dresserp-backend -> Variables içine DATABASE_URL ekle.");
+if (DATABASE_URL) {
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+
+  console.log("✅ Postgres connected");
 } else {
-  try {
-    pool = new Pool({
-      connectionString: DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
+  console.log("❌ DATABASE_URL not found");
+}
 
     // DB denemesi: hata olsa bile server'ı düşürmez
     pool
