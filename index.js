@@ -104,7 +104,29 @@ app.post("/products", async (req, res) => {
     res.status(500).json({ error: "Insert failed" });
   }
 });
+// DELETE product
+app.delete("/products/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "invalid id" });
+    }
 
+    const result = await pool.query(
+      "DELETE FROM products WHERE id=$1 RETURNING id",
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "not found" });
+    }
+
+    res.json({ message: "deleted", id });
+  } catch (err) {
+    console.error("DELETE /products/:id error:", err.message);
+    res.status(500).json({ error: "delete failed" });
+  }
+});
 // ================================
 // Start server (Railway compatible)
 // ================================
