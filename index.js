@@ -1,103 +1,100 @@
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
+// index.js (FINAL)
 
-const app = express(); // ⬅️ BU EN ÜSTTE OLACAK
+import express from "express";
+import cors from "cors";
+import pg from "pg";
 
+const { Pool } = pg;
+
+const app = express();
+
+/** CORS */
 const corsOptions = {
-  origin: [
-    "http://localhost:5173",
-    "https://dresserp-frontend-production.up.railway.app"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
-
 app.use(cors(corsOptions));
-app.use(cors(corsOptions));
-app.use(express.json());
+app.options("*", cors(corsOptions));
 
-/*
-DATABASE CONNECTION
-*/
+/** Body parsers */
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+/** DB */
+if (!process.env.DATABASE_URL) {
+  console.error("❌ DATABASE_URL missing. Add it in Railway Variables.");
+}
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: process.env.DATABASE_URL?.includes("localhost")
+    ? false
+    : { rejectUnauthorized: false },
 });
 
-/*
-HEALTH CHECK
-*/
+/** ROUTES */
 
+// Health
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({ ok: true, service: "dresserp-backend" });
 });
 
-/*
-GET PRODUCTS
-*/
-
-app.get("/products", async (req, res) => {
+// Debug DB
+app.get("/debug/db", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
-    res.json(result.rows);
+    const r = await pool.query("SELECT NOW() as now");
+    res.json({ ok: true, now: r.rows[0].now });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("DB DEBUG ERROR:", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/*
-ADD PRODUCT
-*/
+// Get products
+app.get("/products", async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT id, name, price, image FROM products ORDER BY id DESC"
+    );
+    res.json(r.rows);
+  } catch (err) {
+    console.error("GET /products ERROR:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
 
+// Create product
 app.post("/products", async (req, res) => {
   try {
     const { name, price, image } = req.body;
 
-    const result = await pool.query(
-      "INSERT INTO products (name, price, image) VALUES ($1, $2, $3) RETURNING *",
-      [name, price, image]
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "name gerekli" });
+    }
+    if (price === undefined || price === null || Number.isNaN(Number(price))) {
+      return res.status(400).json({ error: "price gerekli" });
+    }
+
+    const r = await pool.query(
+      "INSERT INTO products (name, price, image) VALUES ($1,$2,$3) RETURNING id, name, price, image",
+      [name.trim(), Number(price), image ?? null]
     );
 
-    res.json(result.rows[0]);
+    res.status(201).json(r.rows[0]);
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-    });
-  }
-});
-
-/*
-DEBUG DB
-*/
-
-app.get("/debug/db", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/*
-START SERVER
-*/
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
-app.get("/products", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
+    console.error("POST /products ERROR:", err);
     res.status(500).json({ error: "Database error" });
   }
+});
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ error: "Not Found" });
+});
+
+/** START */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("✅ Server running on port", PORT);
 });
