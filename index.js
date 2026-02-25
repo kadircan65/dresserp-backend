@@ -1,58 +1,30 @@
-import express from "express";
-import cors from "cors";
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Railway için PORT
-const PORT = process.env.PORT || 5173;
-
-// JSON middleware
 app.use(express.json());
 
-/*
-CORS — FINAL SAFE CONFIG
-*/
 const allowedOrigins = [
   "http://localhost:5173",
   "https://dresserp-frontend.vercel.app"
 ];
 
 app.use(cors({
-  origin: function(origin, callback) {
-
-    // Postman / direct browser access
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    // allowed list
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Vercel preview support
-    if (origin.endsWith(".vercel.app")) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("CORS blocked: " + origin));
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (origin.endsWith(".vercel.app")) return cb(null, true);
+    return cb(new Error("CORS blocked: " + origin));
   },
   credentials: true
 }));
 
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
+app.get("/", (req, res) => res.status(200).send("Backend is running 🚀"));
+app.get("/health", (req, res) => res.status(200).json({ ok: true }));
+app.get("/products", (req, res) => res.status(200).json([{ id: 1, name: "Test Ürün", price: 100 }]));
 
-// PRODUCTS ROUTE TEST
-app.get("/products", (req, res) => {
-  res.json([
-    { id: 1, name: "Test Ürün", price: 100 }
-  ]);
-});
-
-// SERVER START — EN ÖNEMLİ KISIM
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("Server running on port:", PORT);
 });
