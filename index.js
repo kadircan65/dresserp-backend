@@ -1,8 +1,6 @@
-import express from "express";
-import cors from "cors";
-import pkg from "pg";
-
-const { Pool } = pkg;
+const express = require("express");
+const cors = require("cors");
+const { Pool } = require("pg");
 
 const app = express();
 
@@ -10,9 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 /*
-====================================
 DATABASE CONNECTION
-====================================
 */
 
 const pool = new Pool({
@@ -23,40 +19,15 @@ const pool = new Pool({
 });
 
 /*
-====================================
 HEALTH CHECK
-====================================
 */
 
 app.get("/health", (req, res) => {
-  res.send("OK");
+  res.json({ status: "ok" });
 });
 
 /*
-====================================
-DEBUG DATABASE
-====================================
-*/
-
-app.get("/debug/db", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({
-      success: true,
-      time: result.rows[0],
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
-
-/*
-====================================
 GET PRODUCTS
-====================================
 */
 
 app.get("/products", async (req, res) => {
@@ -64,16 +35,12 @@ app.get("/products", async (req, res) => {
     const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({
-      error: err.message,
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
 /*
-====================================
 ADD PRODUCT
-====================================
 */
 
 app.post("/products", async (req, res) => {
@@ -94,9 +61,20 @@ app.post("/products", async (req, res) => {
 });
 
 /*
-====================================
+DEBUG DB
+*/
+
+app.get("/debug/db", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
 START SERVER
-====================================
 */
 
 const PORT = process.env.PORT || 3000;
