@@ -8,12 +8,18 @@ if (process.env.NODE_ENV !== "production") {
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
-
+const API = import.meta.env.VITE_API_URL;
 const app = express();
 
 /**
 // CORS - temiz ve sorunsuz
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://dresserp-frontend-production.up.railway.app"
+  ],
+  credentials: true
+}));
 app.options("*", cors());
 app.get("/", (req, res) => res.status(200).send("OK"));
 app.get("/health", (req, res) => res.status(200).send("ok"));
@@ -102,7 +108,15 @@ app.get("/products", async (req, res) => {
     res.status(500).json({ error: "Ürünler alınamadı" });
   }
 });
-
+app.get("/debug/db", async (req, res) => {
+  try {
+    const db = await pool.query("select current_database() as db, current_user as user");
+    const cnt = await pool.query("select count(*)::int as count from products");
+    res.json({ database: db.rows[0], productsCount: cnt.rows[0].count });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
 // Ekle
 app.post("/products", async (req, res) => {
   try {
