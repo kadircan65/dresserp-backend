@@ -1,7 +1,20 @@
 const express = require("express");
+
 const cors = require("cors");
 const { Pool } = require("pg");
+const cors = require("cors");
 
+const corsOptions = {
+  origin: [
+    "http://localhost:5173",
+    "https://dresserp-frontend-production.up.railway.app"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 const app = express();
 
 app.use(cors());
