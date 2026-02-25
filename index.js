@@ -29,11 +29,36 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
  * - Railway Postgres için SSL genelde gerekir.
  */
 // --- SAFE DATABASE SETUP (crash etmez) ---
+// --- DATABASE INIT (Railway-safe) ---
 const DATABASE_URL =
   process.env.DATABASE_URL ||
   process.env["Postgres.DATABASE_URL"] ||
   process.env.DATABASE_PUBLIC_URL ||
   process.env["Postgres.DATABASE_PUBLIC_URL"];
+
+let pool;
+
+try {
+  if (!DATABASE_URL) {
+    console.error("❌ DATABASE_URL missing");
+  } else {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+    console.log("✅ Pool created");
+  }
+} catch (e) {
+  console.error("❌ Pool init error:", e.message);
+}
+
+// crash önleyici guard
+app.use((req, res, next) => {
+  if (!pool) {
+    return res.status(500).json({ error: "Database not initialized" });
+  }
+  next();
+});
 
 let pool = null;
 
@@ -97,7 +122,7 @@ async function ensureTable() {
     console.error("❌ ensureTable error:", err.message);
   }
 }
-ensureTable();
+// ensureTable();
 
 /**
  * CRUD: /products
