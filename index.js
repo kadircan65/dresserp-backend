@@ -30,19 +30,19 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
  */
 // --- SAFE DATABASE SETUP (crash etmez) ---
 // --- DATABASE INIT (Railway-safe) ---
-const DATABASE_URL =
+// const DATABASE_URL =
   process.env.DATABASE_URL ||
   process.env["Postgres.DATABASE_URL"] ||
   process.env.DATABASE_PUBLIC_URL ||
   process.env["Postgres.DATABASE_PUBLIC_URL"];
 
-let pool;
+// let pool;
 
 try {
   if (!DATABASE_URL) {
     console.error("❌ DATABASE_URL missing");
   } else {
-    pool = new Pool({
+    pool = // new Pool({
       connectionString: DATABASE_URL,
       ssl: { rejectUnauthorized: false },
     });
@@ -60,7 +60,7 @@ app.use((req, res, next) => {
   next();
 });
 
-let pool = null;
+// let pool = null;
 
 if (DATABASE_URL) {
   pool = new Pool({
@@ -101,8 +101,12 @@ pool
 /**
  * Health / Root
  */
+app.use(express.json());
+
 app.get("/", (req, res) => res.status(200).send("OK"));
-app.get("/health", (req, res) => res.status(200).send("ok"));
+app.get("/health", (req, res) => res.json({ status: "ok", mode: "no-db" }));
+
+app.get("/products", (req, res) => res.json([]));
 
 /**
  * (Opsiyonel) tablo yoksa otomatik oluştur
@@ -110,7 +114,7 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
  */
 async function ensureTable() {
   try {
-    await pool.query(`
+    // await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -131,7 +135,7 @@ async function ensureTable() {
 // Listele
 app.get("/products", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM products ORDER BY id DESC;");
+   // const result = await pool.query("SELECT * FROM products ORDER BY id DESC;");
     res.json(result.rows);
   } catch (err) {
     console.error("GET /products error:", err);
@@ -140,8 +144,8 @@ app.get("/products", async (req, res) => {
 });
 app.get("/debug/db", async (req, res) => {
   try {
-    const db = await pool.query("select current_database() as db, current_user as user");
-    const cnt = await pool.query("select count(*)::int as count from products");
+   // const db = await pool.query("select current_database() as db, current_user as user");
+   //const cnt = await pool.query("select count(*)::int as count from products");
     res.json({ database: db.rows[0], productsCount: cnt.rows[0].count });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -164,7 +168,7 @@ app.post("/products", async (req, res) => {
       return res.status(400).json({ error: "price sayı olmalı" });
     }
 
-    const result = await pool.query(
+   // const result = await pool.query(
       "INSERT INTO products (name, price) VALUES ($1, $2) RETURNING *;",
       [String(name).trim(), priceNum]
     );
@@ -194,7 +198,7 @@ app.put("/products/:id", async (req, res) => {
       return res.status(400).json({ error: "price sayı olmalı" });
     }
 
-    const result = await pool.query(
+   // const result = await pool.query(
       "UPDATE products SET name=$1, price=$2 WHERE id=$3 RETURNING *;",
       [String(name).trim(), priceNum, Number(id)]
     );
@@ -213,7 +217,7 @@ app.delete("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    await pool.query("DELETE FROM products WHERE id=$1;", [Number(id)]);
+   // await pool.query("DELETE FROM products WHERE id=$1;", [Number(id)]);
     res.json({ message: "Ürün silindi" });
   } catch (err) {
     console.error("DELETE /products/:id error:", err);
