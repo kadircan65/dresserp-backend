@@ -1,9 +1,21 @@
 const express = require("express");
 const router = express.Router();
 
-let stores = [];
+let stores = []; // in-memory (şimdilik)
 
-// REGISTER
+router.get("/", (req, res) => {
+  // GET /api/stores
+  return res.json(
+    stores.map((s) => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      whatsapp: s.whatsapp,
+      createdAt: s.createdAt,
+    }))
+  );
+});
+
 router.post("/register", (req, res) => {
   const { name, email, password, whatsapp } = req.body;
 
@@ -36,18 +48,12 @@ router.post("/register", (req, res) => {
   });
 });
 
-// LOGIN
 router.post("/login", (req, res) => {
   const { email, password } = req.body;
 
-  const store = stores.find(
-    (s) => s.email === email && s.password === password
-  );
-
+  const store = stores.find((s) => s.email === email && s.password === password);
   if (!store) {
-    return res
-      .status(401)
-      .json({ error: "Email veya şifre hatalı" });
+    return res.status(401).json({ error: "Email veya şifre hatalı" });
   }
 
   return res.json({
@@ -55,20 +61,8 @@ router.post("/login", (req, res) => {
     name: store.name,
     email: store.email,
     whatsapp: store.whatsapp,
+    createdAt: store.createdAt,
   });
-});
-
-// GET ALL STORES
-router.get("/", (req, res) => {
-  return res.json(
-    stores.map((store) => ({
-      id: store.id,
-      name: store.name,
-      email: store.email,
-      whatsapp: store.whatsapp,
-      createdAt: store.createdAt,
-    }))
-  );
 });
 
 module.exports = router;

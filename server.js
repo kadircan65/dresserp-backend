@@ -1,3 +1,4 @@
+console.log("BOOT OK ✅ 2026-02-27 STORES-FIX v1");
 require("dotenv").config();
 
 const express = require("express");
@@ -22,7 +23,9 @@ app.get("/health", (req, res) => {
 // ROUTES — BURASI KRİTİK
 app.use("/api/products", productsRoutes);
 app.use("/api/stores", storesRoutes);
-
+app.get("/__version", (req, res) => {
+  res.json({ ok: true, version: "2026-02-27 STORES-FIX v1" });
+});
 // ROOT TEST
 app.get("/", (req, res) => {
   res.send("OmurApp backend running");
