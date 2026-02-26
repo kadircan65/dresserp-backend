@@ -1,73 +1,61 @@
-import express from "express";
-import cors from "cors";
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
 
+// Railway/Render gibi ortamlarda PORT buradan gelir
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 
-// Railway domainlerini + kendi admin domainini izinli yap
-const allowedOrigins = [
-  /^https:\/\/.*\.up\.railway\.app$/,
-  "http://localhost:5173",
-  "http://localhost:3000",
-];
-
+// CORS (istersen sonra sıkılaştırırız)
 app.use(
   cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      const ok = allowedOrigins.some((o) => (o instanceof RegExp ? o.test(origin) : o === origin));
-      return cb(ok ? null : new Error("CORS blocked"), ok);
-    },
-    credentials: false,
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-token"],
   })
 );
 
 app.use(express.json({ limit: "2mb" }));
 
-app.get("/health", (req, res) => res.status(200).json({ ok: true }));
+// Health
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
-function requireAdmin(req, res, next) {
-  if (!ADMIN_TOKEN) return res.status(500).json({ error: "ADMIN_TOKEN missing on server" });
-  const token = req.header("x-admin-token");
-  if (!token || token !== ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
-  next();
-}
+// Örnek in-memory ürün listesi (sen DB kullanıyorsan burası zaten değişecek)
+let products = [];
 
-// --- Demo in-memory store (DB yoksa) ---
-let products = [
-  { id: 1, name: "Örnek Ürün", price: 1500, imageUrl: "" },
-];
-
-// LIST
+// List
 app.get("/api/products", (req, res) => {
   res.json(products);
 });
 
-// CREATE
-app.post("/api/products", requireAdmin, (req, res) => {
+// Add
+app.post("/api/products", (req, res) => {
   const { name, price, imageUrl } = req.body || {};
-  if (!name || typeof name !== "string") return res.status(400).json({ error: "name required" });
-  const p = {
-    id: Date.now(),
-    name: name.trim(),
-    price: Number(price || 0),
-    imageUrl: (imageUrl || "").trim(),
-  };
-  products.unshift(p);
+  if (!name || typeof price === "undefined") {
+    return res.status(400).json({ error: "name ve price zorunlu" });
+  }
+
+  const id = Date.now().toString();
+  const p = { id, name, price: Number(price), imageUrl: imageUrl || "" };
+  products.push(p);
   res.status(201).json(p);
 });
 
-// DELETE
-app.delete("/api/products/:id", requireAdmin, (req, res) => {
-  const id = String(req.params.id);
+// Delete
+app.delete("/api/products/:id", (req, res) => {
+  const { id } = req.params;
   const before = products.length;
-  products = products.filter((p) => String(p.id) !== id);
-  if (products.length === before) return res.status(404).json({ error: "Not found" });
+  products = products.filter((p) => p.id !== id);
+
+  if (products.length === before) {
+    return res.status(404).json({ error: "urun bulunamadi" });
+  }
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on :${PORT}`);
+// Start
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
