@@ -111,4 +111,7 @@ app.delete("/admin/products/:id", requireAdmin, async (req, res) => {
 
 // ---- PORT (Railway)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => console.log("API running on port", PORT));
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("API running on port", PORT);
+});
