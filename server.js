@@ -1,5 +1,5 @@
 require("dotenv").config();
-
+const productsRoutes = require("./routes/products");
 const express = require("express");
 const cors = require("cors");
 
@@ -31,13 +31,8 @@ app.get("/health", (req, res) => {
 
 // PRODUCTS (temporary)
 let products = [];
+app.use("/api/products", productsRoutes);
 
-app.get("/api/products", (req, res) => {
-  res.json(products);
-});
-
-app.post("/api/products", (req, res) => {
-  const { name, price, imageUrl } = req.body;
 
   const product = {
     id: Date.now().toString(),
