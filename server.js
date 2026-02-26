@@ -1,103 +1,114 @@
 // server.js
-require("dotenv").config();
-
-const express = require("express");
-const cors = require("cors");
-const pool = require("./db");
+import express from "express";
+import cors from "cors";
 
 const app = express();
 
-app.use(cors());
+// Railway / Render / Heroku vb. için port
+const PORT = process.env.PORT || 3000;
+
+// CORS (gerekirse origin'i daraltırız)
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "x-admin"],
+  })
+);
+
 app.use(express.json());
 
-// --- HEALTH ---
-app.get("/health", async (req, res) => {
-  try {
-    const r = await pool.query("select 1 as ok");
-    res.json({ ok: true, db: r.rows[0].ok === 1 });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+// ---- Basit in-memory "DB" ----
+// NOT: Sunucu restart olunca sıfırlanır.
+// Kalıcı olsun istiyorsan DB (Postgres/SQLite) bağlarız.
+let products = [
+  // örnek:
+  // { id: 1, name: "Deneme", price: 1500, imageUrl: "" }
+];
 
-// --- PUBLIC: PRODUCTS ---
-app.get("/products", async (req, res) => {
-  try {
-    const r = await pool.query("select id, name, price, image from products order by id desc");
-    res.json(r.rows);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get("/products/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const r = await pool.query("select id, name, price, image from products where id=$1", [id]);
-    if (r.rowCount === 0) return res.status(404).json({ error: "not found" });
-    res.json(r.rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// --- ADMIN AUTH (TOKEN) ---
-function requireAdmin(req, res, next) {
-  const token = req.header("x-admin-token");
-  if (!process.env.ADMIN_TOKEN) {
-    return res.status(500).json({ error: "ADMIN_TOKEN missing on server" });
-  }
-  if (!token || token !== process.env.ADMIN_TOKEN) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
+function nextId() {
+  const maxId = products.reduce((m, p) => (p.id > m ? p.id : m), 0);
+  return maxId + 1;
 }
 
-// --- ADMIN: CRUD ---
-app.post("/admin/products", requireAdmin, async (req, res) => {
-  try {
-    const { name, price, image } = req.body;
-    if (!name || price == null) return res.status(400).json({ error: "name & price required" });
-
-    const r = await pool.query(
-      "insert into products (name, price, image) values ($1,$2,$3) returning id, name, price, image",
-      [name, price, image || null]
-    );
-    res.status(201).json(r.rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+// ---- Health ----
+app.get("/health", (req, res) => {
+  res.json({ ok: true, service: "dresserp-backend", time: new Date().toISOString() });
 });
 
-app.put("/admin/products/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { name, price, image } = req.body;
+// ---- Products API ----
 
-    const r = await pool.query(
-      "update products set name=$1, price=$2, image=$3 where id=$4 returning id, name, price, image",
-      [name, price, image || null, id]
-    );
-    if (r.rowCount === 0) return res.status(404).json({ error: "not found" });
-    res.json(r.rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+// Listele
+app.get("/api/products", (req, res) => {
+  res.json(products);
 });
 
-app.delete("/admin/products/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const r = await pool.query("delete from products where id=$1 returning id", [id]);
-    if (r.rowCount === 0) return res.status(404).json({ error: "not found" });
-    res.json({ ok: true, deletedId: r.rows[0].id });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+// Ekle
+app.post("/api/products", (req, res) => {
+  const { name, price, imageUrl } = req.body || {};
+
+  if (!name || typeof name !== "string") {
+    return res.status(400).json({ error: "name zorunlu" });
   }
+
+  const numPrice = Number(price);
+  if (!Number.isFinite(numPrice) || numPrice < 0) {
+    return res.status(400).json({ error: "price geçersiz" });
+  }
+
+  const product = {
+    id: nextId(),
+    name: name.trim(),
+    price: numPrice,
+    imageUrl: (imageUrl || "").toString().trim(),
+  };
+
+  products.push(product);
+  res.status(201).json(product);
 });
 
-// --- START ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("API running on port", PORT);
+// Sil (SENDE EKSİK OLAN ENDPOINT)
+app.delete("/api/products/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const index = products.findIndex((p) => p.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: "Ürün bulunamadı" });
+  }
+
+  const deleted = products.splice(index, 1)[0];
+  res.json({ success: true, deleted });
+});
+
+// (Opsiyonel) Güncelle
+app.put("/api/products/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const index = products.findIndex((p) => p.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: "Ürün bulunamadı" });
+  }
+
+  const { name, price, imageUrl } = req.body || {};
+  if (name !== undefined) products[index].name = String(name).trim();
+  if (price !== undefined) {
+    const numPrice = Number(price);
+    if (!Number.isFinite(numPrice) || numPrice < 0) {
+      return res.status(400).json({ error: "price geçersiz" });
+    }
+    products[index].price = numPrice;
+  }
+  if (imageUrl !== undefined) products[index].imageUrl = String(imageUrl).trim();
+
+  res.json(products[index]);
+});
+
+// ---- 404 fallback ----
+app.use((req, res) => {
+  res.status(404).json({ error: "Not Found", path: req.path });
+});
+
+// ---- Start ----
+app.listen(PORT, () => {
+  console.log(`✅ dresserp-backend running on port ${PORT}`);
 });
