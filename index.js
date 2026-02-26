@@ -42,57 +42,55 @@ app.use(
     credentials: true,
   })
 );
-
-// Root + health
-app.get("/", (req, res) => res.status(200).send("Backend is running 🚀"));
-app.get("/health", (req, res) => res.status(200).json({ ok: true }));
-
-// GET products (DB)
-app.get("/products", async (req, res) => {
+app.get("/admin/products", verifyAdmin, async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
-
-    // ✅ cache kapat (304'ü azaltır, her seferinde taze veri)
-    res.set("Cache-Control", "no-store");
-
-    res.status(200).json(result.rows);
+    const products = await db.all("SELECT * FROM products ORDER BY id DESC");
+    res.json(products);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Database error" });
+    console.error("GET PRODUCTS ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
-// Admin: ürün ekle
-app.post("/admin/products", requireAdmin, async (req, res) => {
-  const { name, price, image_url } = req.body;
 
-  if (!name || typeof price !== "number") {
-    return res.status(400).json({ error: "name ve price zorunlu" });
+
+app.post("/admin/products", verifyAdmin, async (req, res) => {
+  try {
+    const { name, price } = req.body;
+
+    if (!name || !price) {
+      return res.status(400).json({ error: "name and price required" });
+    }
+
+    const result = await db.run(
+      "INSERT INTO products (name, price) VALUES (?, ?)",
+      [name, price]
+    );
+
+    res.json({
+      id: result.lastID,
+      name,
+      price
+    });
+
+  } catch (err) {
+    console.error("ADD PRODUCT ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  const result = await pool.query(
-    `INSERT INTO products (name, price, image_url)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
-    [name, price, image_url ?? null]
-  );
-
-  res.status(201).json(result.rows[0]);
 });
 
-// Admin: ürün sil
-app.delete("/admin/products/:id", requireAdmin, async (req, res) => {
-  const { id } = req.params;
 
-  const result = await pool.query(
-    `DELETE FROM products WHERE id = $1 RETURNING *`,
-    [id]
-  );
+app.delete("/admin/products/:id", verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  if (result.rowCount === 0) {
-    return res.status(404).json({ error: "Ürün bulunamadı" });
+    await db.run("DELETE FROM products WHERE id = ?", [id]);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("DELETE PRODUCT ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  res.json({ deleted: result.rows[0] });
 });
 
 // Admin: ürün güncelle
