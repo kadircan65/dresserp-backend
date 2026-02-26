@@ -43,10 +43,14 @@ app.get("/health", (req, res) => res.status(200).json({ ok: true }));
 app.get("/products", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
+
+    // ✅ cache kapat (304'ü azaltır, her seferinde taze veri)
+    res.set("Cache-Control", "no-store");
+
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error("GET /products error:", err);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Database error" });
   }
 });
 
