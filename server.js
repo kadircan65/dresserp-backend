@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const uploadRoutes = require("./routes/upload");
 const app = express();
-
+const storesRoutes = require("./routes/stores");
 // Railway/Render gibi ortamlarda PORT buradan gelir
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log('Listening', PORT));
@@ -31,7 +31,7 @@ let products = [];
 app.get("/api/products", (req, res) => {
   res.json(products);
 });
-
+app.use("/api/stores", storesRoutes);
 // Add
 app.post("/api/products", (req, res) => {
   const { name, price, imageUrl } = req.body || {};
