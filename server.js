@@ -6,6 +6,7 @@ const app = express();
 
 // Railway/Render gibi ortamlarda PORT buradan gelir
 const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log('Listening', PORT));
 
 // CORS (istersen sonra sıkılaştırırız)
 app.use(
