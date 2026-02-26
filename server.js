@@ -57,6 +57,6 @@ app.delete("/api/products/:id", (req, res) => {
 });
 
 // Start
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log("SERVER BASLADI:", PORT);
 });
