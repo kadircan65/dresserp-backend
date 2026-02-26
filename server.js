@@ -82,8 +82,30 @@ app.delete("/admin/products/:id", async (req, res) => {
 });
 
 /* START SERVER */
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.get("/products", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM products ORDER BY id DESC");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("API running on port", PORT);
+  console.log(`API running on port ${PORT}`);
 });
