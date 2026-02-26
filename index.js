@@ -1,10 +1,18 @@
 const { Pool } = require("pg");
 const express = require("express");
 const cors = require("cors");
-
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+function requireAdmin(req, res, next) {
+  const token = req.headers["x-admin-token"];
+  if (!process.env.ADMIN_TOKEN) {
+    return res.status(500).json({ error: "ADMIN_TOKEN not set" });
+  }
+  if (!token || token !== process.env.ADMIN_TOKEN) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
 // Body parser
 app.use(express.json());
 
@@ -53,7 +61,61 @@ app.get("/products", async (req, res) => {
     res.status(500).json({ error: "Database error" });
   }
 });
+// Admin: ürün ekle
+app.post("/admin/products", requireAdmin, async (req, res) => {
+  const { name, price, image_url } = req.body;
 
+  if (!name || typeof price !== "number") {
+    return res.status(400).json({ error: "name ve price zorunlu" });
+  }
+
+  const result = await pool.query(
+    `INSERT INTO products (name, price, image_url)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [name, price, image_url ?? null]
+  );
+
+  res.status(201).json(result.rows[0]);
+});
+
+// Admin: ürün sil
+app.delete("/admin/products/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  const result = await pool.query(
+    `DELETE FROM products WHERE id = $1 RETURNING *`,
+    [id]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: "Ürün bulunamadı" });
+  }
+
+  res.json({ deleted: result.rows[0] });
+});
+
+// Admin: ürün güncelle
+app.put("/admin/products/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { name, price, image_url } = req.body;
+
+  const result = await pool.query(
+    `UPDATE products
+     SET name = COALESCE($1, name),
+         price = COALESCE($2, price),
+         image_url = COALESCE($3, image_url)
+     WHERE id = $4
+     RETURNING *`,
+    [name ?? null, (typeof price === "number" ? price : null), image_url ?? null, id]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: "Ürün bulunamadı" });
+  }
+
+  res.json(result.rows[0]);
+});
 // POST products (DB)  <-- DB kolon adı: image
 app.post("/products", async (req, res) => {
   try {
