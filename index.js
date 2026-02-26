@@ -42,6 +42,21 @@ app.post("/products", async (req, res) => {
   try {
     const { name, price, image_url } = req.body;
 
+    const result = await pool.query(
+      "INSERT INTO products (name, price, image_url) VALUES ($1, $2, $3) RETURNING *",
+      [name, price, image_url]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post("/products", async (req, res) => {
+  try {
+    const { name, price, image_url } = req.body;
+
     if (!name || price === undefined) {
       return res.status(400).json({ error: "name ve price zorunlu" });
     }
