@@ -12,7 +12,6 @@ router.post("/register", (req, res) => {
   }
 
   const exists = stores.find((s) => s.email === email);
-
   if (exists) {
     return res.status(409).json({ error: "Bu email zaten kayıtlı" });
   }
@@ -28,11 +27,12 @@ router.post("/register", (req, res) => {
 
   stores.push(store);
 
-  res.status(201).json({
+  return res.status(201).json({
     id: store.id,
     name: store.name,
     email: store.email,
     whatsapp: store.whatsapp,
+    createdAt: store.createdAt,
   });
 });
 
@@ -45,15 +45,30 @@ router.post("/login", (req, res) => {
   );
 
   if (!store) {
-    return res.status(401).json({ error: "Email veya şifre hatalı" });
+    return res
+      .status(401)
+      .json({ error: "Email veya şifre hatalı" });
   }
 
-  res.json({
+  return res.json({
     id: store.id,
     name: store.name,
     email: store.email,
     whatsapp: store.whatsapp,
   });
+});
+
+// GET ALL STORES
+router.get("/", (req, res) => {
+  return res.json(
+    stores.map((store) => ({
+      id: store.id,
+      name: store.name,
+      email: store.email,
+      whatsapp: store.whatsapp,
+      createdAt: store.createdAt,
+    }))
+  );
 });
 
 module.exports = router;
