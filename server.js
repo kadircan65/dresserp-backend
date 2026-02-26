@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-
+const uploadRoutes = require("./routes/upload");
 const app = express();
 
 // Railway/Render gibi ortamlarda PORT buradan gelir
@@ -16,7 +16,7 @@ app.use(
 );
 
 app.use(express.json({ limit: "2mb" }));
-
+app.use("/api/upload", uploadRoutes);
 // Health
 app.get("/health", (req, res) => {
   res.json({ ok: true });
