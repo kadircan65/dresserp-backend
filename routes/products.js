@@ -14,14 +14,11 @@ router.get("/", (req, res) => {
 router.post("/", (req, res) => {
   const { storeId, name, price, imageUrl } = req.body;
 
-  const product = {
-  id: Date.now().toString(),
-  name,
-  price,
-  imageUrl,
-};
+  if (!storeId) {
+    return res.status(400).json({ error: "storeId gerekli" });
+  }
 
-  const product = {
+  const newProduct = {
     id: Date.now().toString(),
     storeId,
     name,
@@ -29,11 +26,10 @@ router.post("/", (req, res) => {
     imageUrl,
   };
 
-  products.push(product);
+  products.push(newProduct);
 
-  res.json(product);
+  res.json(newProduct);
 });
-
 // DELETE
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
