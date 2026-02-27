@@ -6,23 +6,20 @@ let products = [];
 
 // GET /api/products?storeId=xxx
 router.get("/", (req, res) => {
-  const { storeId } = req.query;
-
-  if (!storeId) {
-    return res.status(400).json({ error: "storeId gerekli" });
-  }
-
-  const filtered = products.filter(p => p.storeId === storeId);
-  res.json(filtered);
+router.get("/", (req, res) => {
+  res.json(products);
 });
 
 // POST /api/products
 router.post("/", (req, res) => {
   const { storeId, name, price, imageUrl } = req.body;
 
-  if (!storeId) {
-    return res.status(400).json({ error: "storeId gerekli" });
-  }
+  const product = {
+  id: Date.now().toString(),
+  name,
+  price,
+  imageUrl,
+};
 
   const product = {
     id: Date.now().toString(),
@@ -39,20 +36,13 @@ router.post("/", (req, res) => {
 
 // DELETE
 router.delete("/:id", (req, res) => {
-
-  const { storeId } = req.query;
   const { id } = req.params;
 
-  const index = products.findIndex(
-    p => p.id === id && p.storeId === storeId
-  );
+  const index = products.findIndex(p => String(p.id) === String(id));
 
-  if (index === -1) {
-    return res.status(404).json({ error: "bulunamadı" });
-  }
+  if (index === -1) return res.status(404).json({ error: "bulunamadı" });
 
   products.splice(index, 1);
-
   res.json({ ok: true });
 });
 
