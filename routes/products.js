@@ -13,13 +13,11 @@ router.get("/", (req, res) => {
 router.post("/", (req, res) => {
   const { storeId, name, price, imageUrl } = req.body;
 
-  if (!storeId) {
-    return res.status(400).json({ error: "storeId gerekli" });
-  }
+  const safeStoreId = storeId || "default-store";
 
   const newProduct = {
     id: Date.now().toString(),
-    storeId,
+    storeId: safeStoreId,
     name,
     price,
     imageUrl,
