@@ -27,6 +27,10 @@ router.post("/", (req, res) => {
   };
 
   products.push(newProduct);
+  res.json(newProduct);
+});
+
+  products.push(newProduct);
 
   res.json(newProduct);
 });
