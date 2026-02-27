@@ -4,13 +4,12 @@ const router = express.Router();
 // geçici in-memory db
 let products = [];
 
-// GET /api/products?storeId=xxx
-router.get("/", (req, res) => {
+// GET
 router.get("/", (req, res) => {
   res.json(products);
 });
 
-// POST /api/products
+// POST
 router.post("/", (req, res) => {
   const { storeId, name, price, imageUrl } = req.body;
 
@@ -30,17 +29,15 @@ router.post("/", (req, res) => {
   res.json(newProduct);
 });
 
-  products.push(newProduct);
-
-  res.json(newProduct);
-});
 // DELETE
 router.delete("/:id", (req, res) => {
   const { id } = req.params;
 
-  const index = products.findIndex(p => String(p.id) === String(id));
+  const index = products.findIndex(p => p.id === id);
 
-  if (index === -1) return res.status(404).json({ error: "bulunamadı" });
+  if (index === -1) {
+    return res.status(404).json({ error: "bulunamadı" });
+  }
 
   products.splice(index, 1);
   res.json({ ok: true });
