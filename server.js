@@ -1,39 +1,55 @@
-console.log("BOOT OK ✅ 2026-02-27 STORES-FIX v1");
+// server.js
+console.log("BOOT OK ✅ 2026-02-27 FULL SERVER.js");
+
 require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
 
+// ✅ ROUTES (dosya yolları sende böyle)
 const productsRoutes = require("./routes/products");
 const storesRoutes = require("./routes/stores");
+const uploadRoutes = require("./routes/upload");
 
 const app = express();
 
-// CORS
-app.use(cors());
+// ✅ CORS
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-// JSON
+// ✅ Body parsers
 app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-// HEALTH CHECK
+// ✅ Health
 app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
-// ROUTES — BURASI KRİTİK
+// ✅ Routes
 app.use("/api/products", productsRoutes);
 app.use("/api/stores", storesRoutes);
-app.get("/__version", (req, res) => {
-  res.json({ ok: true, version: "2026-02-27 STORES-FIX v1" });
-});
-// ROOT TEST
-app.get("/", (req, res) => {
-  res.send("OmurApp backend running");
+app.use("/api/upload", uploadRoutes);
+
+// ✅ 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found", path: req.originalUrl });
 });
 
-// SERVER START
+// ✅ Error handler
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+  res.status(500).json({ error: "server_error", message: err.message });
+});
+
+// ✅ PORT
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server started on port", PORT);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
