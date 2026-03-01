@@ -1,136 +1,80 @@
-// routes/products.js
 const express = require("express");
-const crypto = require("crypto");
-const db = require("../db");
-
 const router = express.Router();
 
-/**
- * Admin auth middleware
- * - Reads token from header: "x-admin-token"
- * - Also accepts: "Authorization: Bearer <token>"
- * - Compares securely with process.env.ADMIN_TOKEN
- */
+const db = require("../db");
+
+// Admin auth middleware
 function requireAdmin(req, res, next) {
-  const expected = (process.env.ADMIN_TOKEN || "").trim();
+  const token = req.headers["x-admin-token"];
 
-  if (!expected) {
+  if (!process.env.ADMIN_TOKEN) {
     return res.status(500).json({ error: "ADMIN_TOKEN missing on server" });
-  }
-
-  let token = (req.headers["x-admin-token"] || "").toString().trim();
-
-  if (!token) {
-    const auth = (req.headers["authorization"] || "").toString().trim();
-    if (auth.toLowerCase().startsWith("bearer ")) {
-      token = auth.slice(7).trim();
-    }
   }
 
   if (!token) {
     return res.status(401).json({ error: "Missing x-admin-token" });
   }
 
-  // constant-time compare
-  const a = Buffer.from(token);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+  if (token !== process.env.ADMIN_TOKEN) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
   next();
 }
 
-// ✅ PUBLIC: list products
+// ✅ PUBLIC: GET all products
 router.get("/", async (req, res) => {
   try {
     const { rows } = await db.query(
-      "SELECT id, name, price FROM products ORDER BY id DESC"
+      "SELECT id, name, price, image_url FROM products ORDER BY id DESC"
     );
     res.json(rows);
   } catch (err) {
-    console.error("db_error", err);
+    console.error("GET /products db_error:", err);
     res.status(500).json({ error: "db_error" });
   }
 });
 
-// ✅ ADMIN: add product
+// ✅ ADMIN: POST create product
 router.post("/", requireAdmin, async (req, res) => {
   try {
-    const name = (req.body?.name || "").toString().trim();
-    const priceRaw = req.body?.price;
+    const { name, price, image_url } = req.body;
 
-    // Accept number or numeric string
-    const price = typeof priceRaw === "string" ? Number(priceRaw.trim()) : Number(priceRaw);
-
-    if (!name) {
+    if (!name || String(name).trim().length < 1) {
       return res.status(400).json({ error: "name gerekli" });
     }
-    if (!Number.isFinite(price) || price <= 0) {
-      return res.status(400).json({ error: "price sayi olmali ve 0'dan buyuk olmali" });
+
+    const p = Number(price);
+    if (!Number.isFinite(p) || p <= 0) {
+      return res.status(400).json({ error: "price sayi olmali ve > 0" });
     }
+
+    const img = image_url ? String(image_url).trim() : null;
 
     const { rows } = await db.query(
-      "INSERT INTO products (name, price) VALUES ($1, $2) RETURNING id, name, price",
-      [name, price]
+      "INSERT INTO products (name, price, image_url) VALUES ($1, $2, $3) RETURNING id, name, price, image_url",
+      [String(name).trim(), p, img]
     );
 
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error("db_error", err);
-    res.status(500).json({ error: "db_error" });
-  }
-});
-
-// ✅ ADMIN: update product (opsiyonel, kullanmasan da sorun değil)
-router.put("/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      return res.status(400).json({ error: "gecersiz id" });
-    }
-
-    const name = (req.body?.name ?? "").toString().trim();
-    const priceRaw = req.body?.price;
-    const price = typeof priceRaw === "string" ? Number(priceRaw.trim()) : Number(priceRaw);
-
-    if (!name) {
-      return res.status(400).json({ error: "name gerekli" });
-    }
-    if (!Number.isFinite(price) || price <= 0) {
-      return res.status(400).json({ error: "price sayi olmali ve 0'dan buyuk olmali" });
-    }
-
-    const { rows } = await db.query(
-      "UPDATE products SET name=$1, price=$2 WHERE id=$3 RETURNING id, name, price",
-      [name, price, id]
-    );
-
-    if (!rows[0]) return res.status(404).json({ error: "not_found" });
     res.json(rows[0]);
   } catch (err) {
-    console.error("db_error", err);
+    console.error("POST /products db_error:", err);
     res.status(500).json({ error: "db_error" });
   }
 });
 
-// ✅ ADMIN: delete product (opsiyonel)
+// ✅ ADMIN: DELETE product by id (opsiyonel ama iyi olur)
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      return res.status(400).json({ error: "gecersiz id" });
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ error: "id gecersiz" });
     }
 
-    const { rows } = await db.query(
-      "DELETE FROM products WHERE id=$1 RETURNING id",
-      [id]
-    );
-
-    if (!rows[0]) return res.status(404).json({ error: "not_found" });
-    res.json({ ok: true, id: rows[0].id });
+    await db.query("DELETE FROM products WHERE id = $1", [id]);
+    res.json({ ok: true });
   } catch (err) {
-    console.error("db_error", err);
+    console.error("DELETE /products db_error:", err);
     res.status(500).json({ error: "db_error" });
   }
 });
