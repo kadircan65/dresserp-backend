@@ -6,7 +6,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
-// ✅ ROUTES (dosya yolları sende böyle)
+// ✅ ROUTES
 const productsRoutes = require("./routes/products");
 const storesRoutes = require("./routes/stores");
 const uploadRoutes = require("./routes/upload");
@@ -14,13 +14,19 @@ const uploadRoutes = require("./routes/upload");
 const app = express();
 
 // ✅ CORS
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "x-admin-token",
+    "X-Admin-Token",
+  ],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // preflight garantisi
 
 // ✅ Body parsers
 app.use(express.json({ limit: "2mb" }));
