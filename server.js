@@ -18,6 +18,7 @@ const app = express();
  */
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
+  "https://dresserp-admin.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
