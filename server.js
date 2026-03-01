@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 // ✅ ROUTES
 const productsRoutes = require("./routes/products");
@@ -13,24 +14,39 @@ const uploadRoutes = require("./routes/upload");
 
 const app = express();
 
-// ✅ CORS
-const corsOptions = {
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "x-admin-token",
-    "X-Admin-Token",
-  ],
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // preflight garantisi
-
-// ✅ Body parsers
+// ✅ Body parsers (MUTLAKA login route'tan önce)
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ CORS
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "X-Admin-Token"],
+  })
+);
+
+// ✅ Admin login route (Body parser'dan sonra!)
+app.post("/api/admin/login", (req, res) => {
+  const { password } = req.body || {};
+
+  if (!process.env.ADMIN_PASSWORD) {
+    return res.status(500).json({ error: "admin_password_missing" });
+  }
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: "jwt_secret_missing" });
+  }
+  if (!password || password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: "invalid_password" });
+  }
+
+  const token = jwt.sign({ role: "admin" }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
+
+  return res.json({ token });
+});
 
 // ✅ Health
 app.get("/health", (req, res) => {

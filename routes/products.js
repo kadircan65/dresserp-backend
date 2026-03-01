@@ -1,28 +1,31 @@
 const express = require("express");
-const router = express.Router();
-
 const db = require("../db");
 
-// Admin auth middleware
+const router = express.Router();
+
+// ✅ Admin auth middleware (JWT)
 function requireAdmin(req, res, next) {
-  const token = req.headers["x-admin-token"];
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
 
-  if (!process.env.ADMIN_TOKEN) {
-    return res.status(500).json({ error: "ADMIN_TOKEN missing on server" });
+  if (!token) return res.status(401).json({ error: "missing_token" });
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: "jwt_secret_missing" });
   }
 
-  if (!token) {
-    return res.status(401).json({ error: "Missing x-admin-token" });
+  try {
+    const jwt = require("jsonwebtoken");
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!payload || payload.role !== "admin") {
+      return res.status(403).json({ error: "forbidden" });
+    }
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: "invalid_token" });
   }
-
-  if (token !== process.env.ADMIN_TOKEN) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  next();
 }
 
-// ✅ PUBLIC: GET all products
+// ✅ GET all products (PUBLIC)
 router.get("/", async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -30,51 +33,32 @@ router.get("/", async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error("GET /products db_error:", err);
+    console.error("db_error", err);
     res.status(500).json({ error: "db_error" });
   }
 });
 
-// ✅ ADMIN: POST create product
+// ✅ POST product (ADMIN)
 router.post("/", requireAdmin, async (req, res) => {
   try {
-    const { name, price, image_url } = req.body;
+    const { name, price, image_url } = req.body || {};
 
-    if (!name || String(name).trim().length < 1) {
-      return res.status(400).json({ error: "name gerekli" });
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "name_required" });
     }
-
     const p = Number(price);
     if (!Number.isFinite(p) || p <= 0) {
-      return res.status(400).json({ error: "price sayi olmali ve > 0" });
+      return res.status(400).json({ error: "price_invalid" });
     }
-
-    const img = image_url ? String(image_url).trim() : null;
 
     const { rows } = await db.query(
       "INSERT INTO products (name, price, image_url) VALUES ($1, $2, $3) RETURNING id, name, price, image_url",
-      [String(name).trim(), p, img]
+      [name.trim(), p, image_url || null]
     );
 
     res.json(rows[0]);
   } catch (err) {
-    console.error("POST /products db_error:", err);
-    res.status(500).json({ error: "db_error" });
-  }
-});
-
-// ✅ ADMIN: DELETE product by id (opsiyonel ama iyi olur)
-router.delete("/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) {
-      return res.status(400).json({ error: "id gecersiz" });
-    }
-
-    await db.query("DELETE FROM products WHERE id = $1", [id]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("DELETE /products db_error:", err);
+    console.error("db_error", err);
     res.status(500).json({ error: "db_error" });
   }
 });
