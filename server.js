@@ -42,8 +42,14 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ===== HEALTH =====
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+// ===== HEALTH =====
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
+});
 // ===== ADMIN AUTH (JWT) =====
 app.post("/api/admin/login", (req, res) => {
   try {
