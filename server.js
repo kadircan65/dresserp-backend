@@ -4,7 +4,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-
+const Product = require("./models/Product");
 const productsRoutes = require("./routes/products");
 const storesRoutes = require("./routes/stores");
 const uploadRoutes = require("./routes/upload");
@@ -19,7 +19,7 @@ const app = express();
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
   "https://dresserp-admin.vercel.app",
-  "https://dresserp-frontend-uinx.vercel.app", // ✅ BUNU EKLE
+  "https://dresserp-frontend-uinx.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
