@@ -19,10 +19,10 @@ const app = express();
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
   "https://dresserp-admin.vercel.app",
+  "https://dresserp-frontend-uinx.vercel.app", // ✅ BUNU EKLE
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
-
 const corsOptions = {
   origin: function (origin, cb) {
     // origin yoksa (server-to-server / postman) izin ver
