@@ -5,6 +5,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 
+// Routes
 const productsRoutes = require("./routes/products");
 const storesRoutes = require("./routes/stores");
 const uploadRoutes = require("./routes/upload");
@@ -14,7 +15,8 @@ const app = express();
 /**
  * CORS
  * - VITE_ORIGIN: admin panel domain (vercel) -> örn: https://dresserp-admin.vercel.app
- * - İstersen localhost da ekleyebilirsin (dev için).
+ * - Storefront domain'i de ekliyoruz.
+ * - Local dev için localhost ekliyoruz.
  */
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
@@ -23,6 +25,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
+
 const corsOptions = {
   origin: function (origin, cb) {
     // origin yoksa (server-to-server / postman) izin ver
@@ -42,15 +45,10 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ===== HEALTH =====
-// ===== HEALTH =====
-app.get("/health", (req, res) => {
-  res.json({ ok: true });
-});
+app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
-});
-// ===== ADMIN AUTH (JWT) =====
+// ===== ADMIN LOGIN (JWT) =====
 app.post("/api/admin/login", (req, res) => {
   try {
     const { password } = req.body || {};
@@ -78,55 +76,19 @@ app.post("/api/admin/login", (req, res) => {
     return res.status(500).json({ error: "server_error" });
   }
 });
-// ===== PRODUCTS =====
-
-// Ürünleri getir (storefront kullanacak)
-app.get("/api/products", async (req, res) => {
-  try {
-    const products = await Product.find().sort({ createdAt: -1 });
-    res.json(products);
-  } catch (err) {
-    console.error("products_error:", err);
-    res.status(500).json({ error: "products_fetch_failed" });
-  }
-});
-// Token doğru mu diye frontend açılışında kontrol edelim (auto login için)
-app.get("/api/admin/verify", (req, res) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-
-    if (!token) return res.status(401).json({ error: "missing_token" });
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ error: "jwt_secret_missing" });
-    }
-
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    if (payload?.role !== "admin") {
-      return res.status(403).json({ error: "forbidden" });
-    }
-
-    return res.json({ ok: true });
-  } catch (e) {
-    return res.status(401).json({ error: "invalid_token" });
-  }
-});
 
 // ===== ROUTES =====
+// ÖNEMLİ: /api/products route'u burada bağlanır.
+// server.js içinde ayrıca app.get("/api/products"... YAZMA! Çakışır ve 500 üretir.
 app.use("/api/products", productsRoutes);
 app.use("/api/stores", storesRoutes);
 app.use("/api/upload", uploadRoutes);
 
-// ===== 404 =====
-app.use((req, res) => {
-  res.status(404).json({ error: "not_found" });
-});
-
 // ===== ERROR HANDLER =====
 app.use((err, req, res, next) => {
-  console.error("SERVER_ERROR:", err);
+  console.error("server_error:", err);
   res.status(500).json({ error: "server_error" });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Listening on", PORT));
+app.listen(PORT, () => console.log("API listening on", PORT));
