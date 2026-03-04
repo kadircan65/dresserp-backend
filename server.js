@@ -1,35 +1,30 @@
-// server.js
+// server.js (multi-store)
 require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
 
-// Routes
-const productsRoutes = require("./routes/products");
 const storesRoutes = require("./routes/stores");
-const uploadRoutes = require("./routes/upload");
+const productsRoutes = require("./routes/products");
 
 const app = express();
 
 /**
  * CORS
- * - VITE_ORIGIN: admin panel domain (vercel) -> örn: https://dresserp-admin.vercel.app
- * - Storefront domain'i de ekliyoruz.
- * - Local dev için localhost ekliyoruz.
+ * VITE_ORIGIN: admin domain ya da frontend domain (tek tek)
+ * ayrıca allowedOrigins listesine Vercel storefront/admin domainlerini ekle
  */
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
   "https://dresserp-admin.vercel.app",
-  "https://dresserp-frontend-uinx.vercel.app",
+  "https://dresserp-frontend-unix.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
 
 const corsOptions = {
   origin: function (origin, cb) {
-    // origin yoksa (server-to-server / postman) izin ver
-    if (!origin) return cb(null, true);
+    if (!origin) return cb(null, true); // server-to-server / postman
     if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error("Not allowed by CORS: " + origin));
   },
@@ -44,51 +39,53 @@ app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ===== HEALTH =====
+// HEALTH
 app.get("/health", (req, res) => res.json({ ok: true }));
-app.get("/api/health", (req, res) => res.json({ ok: true }));
 
-// ===== ADMIN LOGIN (JWT) =====
-app.post("/api/admin/login", (req, res) => {
+/**
+ * MULTI STORE ROUTES
+ * Base path: /api/s/:slug/...
+ */
+app.use("/api/s", storesRoutes);
+app.use("/api/s", productsRoutes);
+
+// 404
+app.use((req, res) => res.status(404).json({ error: "not_found" }));
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("Server running on", PORT));
+app.get("/setup-db", async (req, res) => {
+  const db = require("./db");
+
   try {
-    const { password } = req.body || {};
 
-    if (!process.env.ADMIN_PASSWORD) {
-      return res.status(500).json({ error: "admin_password_missing" });
-    }
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ error: "jwt_secret_missing" });
-    }
-    if (!password) {
-      return res.status(400).json({ error: "password_required" });
-    }
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: "invalid_password" });
-    }
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS stores (
+        id SERIAL PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        store_name TEXT NOT NULL DEFAULT 'Store',
+        whatsapp_number TEXT NOT NULL DEFAULT '',
+        admin_password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    const token = jwt.sign({ role: "admin" }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        store_id INT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        price NUMERIC NOT NULL,
+        image_url TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    return res.json({ token });
-  } catch (e) {
-    console.error("admin_login_error:", e);
-    return res.status(500).json({ error: "server_error" });
+    res.json({status:"database_ready"});
+
+  } catch (err) {
+    console.error(err);
+    res.json({error: err.message});
   }
 });
-
-// ===== ROUTES =====
-// ÖNEMLİ: /api/products route'u burada bağlanır.
-// server.js içinde ayrıca app.get("/api/products"... YAZMA! Çakışır ve 500 üretir.
-app.use("/api/products", productsRoutes);
-app.use("/api/stores", storesRoutes);
-app.use("/api/upload", uploadRoutes);
-
-// ===== ERROR HANDLER =====
-app.use((err, req, res, next) => {
-  console.error("server_error:", err);
-  res.status(500).json({ error: "server_error" });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("API listening on", PORT));
