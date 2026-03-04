@@ -78,7 +78,18 @@ app.post("/api/admin/login", (req, res) => {
     return res.status(500).json({ error: "server_error" });
   }
 });
+// ===== PRODUCTS =====
 
+// Ürünleri getir (storefront kullanacak)
+app.get("/api/products", async (req, res) => {
+  try {
+    const products = await Product.find().sort({ createdAt: -1 });
+    res.json(products);
+  } catch (err) {
+    console.error("products_error:", err);
+    res.status(500).json({ error: "products_fetch_failed" });
+  }
+});
 // Token doğru mu diye frontend açılışında kontrol edelim (auto login için)
 app.get("/api/admin/verify", (req, res) => {
   try {
