@@ -1,4 +1,4 @@
-// server.js (multi-store)
+// server.js
 require("dotenv").config();
 
 const express = require("express");
@@ -42,12 +42,15 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
-// DB SETUP
+/**
+ * DB SETUP / MIGRATION
+ * eski products tablosunu da bozmadan düzeltir
+ */
 app.get("/setup-db", async (req, res) => {
   const db = require("./db");
 
   try {
-    // 1) stores tablosu
+    // stores tablosu
     await db.query(`
       CREATE TABLE IF NOT EXISTS stores (
         id SERIAL PRIMARY KEY,
@@ -60,19 +63,17 @@ app.get("/setup-db", async (req, res) => {
       );
     `);
 
-    // 2) products tablosu (yoksa oluştur)
+    // products tablosu (eski sistemle uyumlu temel hali)
     await db.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         price NUMERIC NOT NULL,
-        image_url TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        store_id INT
+        image_url TEXT
       );
     `);
 
-    // 3) Eski products tablosunda eksik kolonları ekle
+    // eksik kolonları ekle
     await db.query(`
       ALTER TABLE products
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
@@ -83,21 +84,21 @@ app.get("/setup-db", async (req, res) => {
       ADD COLUMN IF NOT EXISTS store_id INT;
     `);
 
-    // 4) Varsayılan mağaza oluştur (eski ürünleri buna bağlamak için)
+    // varsayılan mağaza oluştur
     await db.query(`
       INSERT INTO stores (id, slug, store_name, whatsapp_number, admin_password_hash)
       VALUES (1, 'main', 'Main Store', '', '')
       ON CONFLICT (id) DO NOTHING;
     `);
 
-    // 5) Eski ürünlerde store_id boşsa 1 yap
+    // eski ürünleri main mağazasına bağla
     await db.query(`
       UPDATE products
       SET store_id = 1
       WHERE store_id IS NULL;
     `);
 
-    // 6) Foreign key yoksa ekle
+    // foreign key ekle (yoksa)
     await db.query(`
       DO $$
       BEGIN
@@ -114,7 +115,7 @@ app.get("/setup-db", async (req, res) => {
       $$;
     `);
 
-    // 7) Indexler
+    // indexler
     await db.query(`
       CREATE INDEX IF NOT EXISTS idx_products_store_id
       ON products(store_id);
@@ -130,4 +131,41 @@ app.get("/setup-db", async (req, res) => {
     console.error("setup_db_error:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * GEÇİCİ ESKİ ENDPOINT
+ * storefront bozulmasın diye bıraktık
+ */
+app.get("/api/products", async (req, res) => {
+  try {
+    const db = require("./db");
+
+    const { rows } = await db.query(`
+      SELECT id, name, price, image_url, created_at, store_id
+      FROM products
+      ORDER BY id DESC
+    `);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("products_fetch_error:", err);
+    res.status(500).json({ error: "products_fetch_failed" });
+  }
+});
+
+/**
+ * MULTI STORE ROUTES
+ */
+app.use("/api/s", storesRoutes);
+app.use("/api/s", productsRoutes);
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found" });
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("Server running on", PORT);
 });
