@@ -5,84 +5,135 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 
 function getSlug(req) {
-  return (req.params.slug || "").trim().toLowerCase();
+  return String(req.params.slug || "").trim().toLowerCase();
 }
 
 function requireAdmin(req, res, next) {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
 
-  if (!token) return res.status(401).json({ error: "missing_token" });
-  if (!process.env.JWT_SECRET) return res.status(500).json({ error: "jwt_secret_missing" });
+  if (!token) {
+    return res.status(401).json({ error: "missing_token" });
+  }
+
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: "jwt_secret_missing" });
+  }
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+
     if (!payload || payload.role !== "admin" || !payload.storeId) {
       return res.status(403).json({ error: "forbidden" });
     }
+
     req.admin = payload;
     next();
-  } catch (e) {
+  } catch (err) {
     return res.status(401).json({ error: "invalid_token" });
   }
 }
 
-/**
- * PUBLIC: ürünleri getir
- * GET /api/s/:slug/products
- */
+// STORE'A GÖRE ÜRÜNLERİ GETİR
 router.get("/:slug/products", async (req, res) => {
   try {
     const slug = getSlug(req);
 
-    const storeRes = await db.query("SELECT id FROM stores WHERE slug = $1", [slug]);
-    if (!storeRes.rows[0]) return res.status(404).json({ error: "store_not_found" });
+    const storeResult = await db.query(
+      `SELECT id FROM stores WHERE slug = $1`,
+      [slug]
+    );
 
-    const storeId = storeRes.rows[0].id;
+    if (!storeResult.rows[0]) {
+      return res.status(404).json({ error: "store_not_found" });
+    }
 
-    const { rows } = await db.query(
-      `SELECT id, name, price, image_url, created_at
+    const storeId = storeResult.rows[0].id;
+
+    const result = await db.query(
+      `SELECT id, name, price, image_url, created_at, store_id
        FROM products
        WHERE store_id = $1
-       ORDER BY created_at DESC`,
+       ORDER BY id DESC`,
       [storeId]
     );
 
-    res.json(rows);
+    res.json(result.rows);
   } catch (err) {
-    console.error("products_get_error", err);
+    console.error("store_products_error:", err);
     res.status(500).json({ error: "products_fetch_failed" });
   }
 });
 
-/**
- * ADMIN: ürün ekle
- * POST /api/s/:slug/products
- * body: { name, price, image_url }
- */
+// STORE'A ÜRÜN EKLE
 router.post("/:slug/products", requireAdmin, async (req, res) => {
   try {
     const slug = getSlug(req);
-    if (req.admin.slug !== slug) return res.status(403).json({ error: "store_mismatch" });
+
+    if (req.admin.slug !== slug) {
+      return res.status(403).json({ error: "store_mismatch" });
+    }
 
     const name = String(req.body?.name || "").trim();
+    const image_url = String(req.body?.image_url || "").trim();
     const price = Number(req.body?.price);
-    const image_url = req.body?.image_url ? String(req.body.image_url).trim() : null;
 
-    if (!name) return res.status(400).json({ error: "name_required" });
-    if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: "price_invalid" });
+    if (!name) {
+      return res.status(400).json({ error: "name_required" });
+    }
 
-    const { rows } = await db.query(
-      `INSERT INTO products (store_id, name, price, image_url)
+    if (!Number.isFinite(price) || price <= 0) {
+      return res.status(400).json({ error: "price_invalid" });
+    }
+
+    const result = await db.query(
+      `INSERT INTO products (name, price, image_url, store_id)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, name, price, image_url, created_at`,
-      [req.admin.storeId, name, price, image_url || null]
+       RETURNING id, name, price, image_url, created_at, store_id`,
+      [
+        name,
+        price,
+        image_url || null,
+        req.admin.storeId
+      ]
     );
 
-    res.json(rows[0]);
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error("products_post_error", err);
+    console.error("product_create_error:", err);
     res.status(500).json({ error: "product_create_failed" });
+  }
+});
+
+// STORE'DAN ÜRÜN SİL
+router.delete("/:slug/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const slug = getSlug(req);
+    const id = Number(req.params.id);
+
+    if (req.admin.slug !== slug) {
+      return res.status(403).json({ error: "store_mismatch" });
+    }
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "invalid_product_id" });
+    }
+
+    const result = await db.query(
+      `DELETE FROM products
+       WHERE id = $1 AND store_id = $2
+       RETURNING id`,
+      [id, req.admin.storeId]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "product_not_found" });
+    }
+
+    res.json({ ok: true, deletedId: id });
+  } catch (err) {
+    console.error("product_delete_error:", err);
+    res.status(500).json({ error: "product_delete_failed" });
   }
 });
 
