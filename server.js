@@ -11,20 +11,18 @@ const app = express();
 
 /**
  * CORS
- * VITE_ORIGIN: admin domain ya da frontend domain (tek tek)
- * ayrıca allowedOrigins listesine Vercel storefront/admin domainlerini ekle
  */
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
   "https://dresserp-admin.vercel.app",
-  "https://dresserp-frontend-unix.vercel.app",
+  "https://dresserp-frontend-uinx.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
 
 const corsOptions = {
   origin: function (origin, cb) {
-    if (!origin) return cb(null, true); // server-to-server / postman
+    if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error("Not allowed by CORS: " + origin));
   },
@@ -40,25 +38,15 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // HEALTH
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
-/**
- * MULTI STORE ROUTES
- * Base path: /api/s/:slug/...
- */
-app.use("/api/s", storesRoutes);
-app.use("/api/s", productsRoutes);
-
-// 404
-app.use((req, res) => res.status(404).json({ error: "not_found" }));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running on", PORT));
+// DB SETUP
 app.get("/setup-db", async (req, res) => {
   const db = require("./db");
 
   try {
-
     await db.query(`
       CREATE TABLE IF NOT EXISTS stores (
         id SERIAL PRIMARY KEY,
@@ -82,10 +70,53 @@ app.get("/setup-db", async (req, res) => {
       );
     `);
 
-    res.json({status:"database_ready"});
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_products_store_id
+      ON products(store_id);
+    `);
 
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_products_created_at
+      ON products(created_at);
+    `);
+
+    res.json({ status: "database_ready" });
   } catch (err) {
-    console.error(err);
-    res.json({error: err.message});
+    console.error("setup_db_error:", err);
+    res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * MULTI STORE ROUTES
+ * /api/s/:slug/store
+ * /api/s/:slug/products
+ * /api/s/create
+ * /api/s/:slug/admin/login
+ */
+app.use("/api/s", storesRoutes);
+app.use("/api/s", productsRoutes);
+
+// ESKİ storefront'un bozulmaması için geçici public test route
+app.get("/api/products", async (req, res) => {
+  try {
+    const db = require("./db");
+    const { rows } = await db.query(
+      "SELECT id, name, price, image_url, created_at FROM products ORDER BY created_at DESC"
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("products_fetch_error:", err);
+    res.status(500).json({ error: "products_fetch_failed" });
+  }
+});
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found" });
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("Server running on", PORT);
 });
