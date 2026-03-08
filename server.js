@@ -1,4 +1,3 @@
-// server.js
 require("dotenv").config();
 
 const express = require("express");
@@ -9,13 +8,11 @@ const productsRoutes = require("./routes/products");
 
 const app = express();
 
-/**
- * CORS
- */
 const allowedOrigins = [
   process.env.VITE_ORIGIN,
   "https://dresserp-admin.vercel.app",
-  "https://dresserp-frontend-uinx.vercel.app",
+  "https://dresserp.app",
+  "https://www.dresserp.app",
   "http://localhost:5173",
   "http://localhost:3000",
 ].filter(Boolean);
@@ -23,7 +20,18 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, cb) {
     if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+
+    try {
+      const u = new URL(origin);
+      if (u.hostname.endsWith(".dresserp.app")) {
+        return cb(null, true);
+      }
+    } catch (e) {}
+
     return cb(new Error("Not allowed by CORS: " + origin));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -33,15 +41,24 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// HEALTH
 app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.use("/api/s", storesRoutes);
+app.use("/api/s", productsRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found" });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("server running on", PORT);
+});
 /**
  * DB SETUP / MIGRATION
  * eski products tablosunu da bozmadan düzeltir
